@@ -65,7 +65,7 @@ button.open{background:transparent;color:var(--chalk);border:1.5px dashed var(--
 .pick button[aria-pressed="true"]{background:var(--chalk);color:var(--board);border-color:var(--chalk)}
 .yn li.right,.quiz fieldset.right{border-color:var(--ok)} .yn li.wrong,.quiz fieldset.wrong{border-color:var(--bad)}
 .why{margin:8px 0 0;font-size:14px;color:var(--chalk-dim)}
-.right .why::before{content:"✓ ";color:var(--ok);font-weight:700} .wrong .why::before{content:"✗ ";color:var(--bad);font-weight:700}
+.right .why>p::before{content:"✓ ";color:var(--ok);font-weight:700} .wrong .why>p::before{content:"✗ ";color:var(--bad);font-weight:700} .quiz .right .why::before{content:"✓ ";color:var(--ok);font-weight:700} .quiz .wrong .why::before{content:"✗ ";color:var(--bad);font-weight:700}
 .quiz fieldset{border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px;min-width:0}
 .quiz legend{font-weight:600;padding:0;float:left;width:100%;margin-bottom:6px}.quiz fieldset>label{clear:both}
 .quiz label{display:flex;gap:8px;align-items:flex-start;padding:6px 2px;font-size:15px}
