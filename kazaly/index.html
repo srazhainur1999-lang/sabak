@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Қазалы станциясының су мұнарасының (1904–1905) айналдырып көруге болатын 3D моделі">
+<meta name="description" content="Қазалы станциясының су мұнарасының (1904–1905) айналдырып көруге болатын 3D моделі: жөндеуге дейін және кейін">
 <title>Қазалы су мұнарасы 3D</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
 <style>
@@ -37,6 +37,9 @@ button{font:700 14px/1 var(--text);color:var(--ink);background:transparent;borde
 button[aria-pressed="true"]{background:var(--copper);border-color:var(--copper);color:#1A120C}
 button:hover{border-color:var(--copper)}
 button:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+.seg{display:flex}
+.seg button:first-child{border-radius:8px 0 0 8px}
+.seg button:last-child{border-radius:0 8px 8px 0;border-left:none}
 .hint{margin-left:auto;font-size:13px;color:var(--muted)}
 #fail[hidden]{display:none}
 #fail{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted)}
@@ -50,7 +53,7 @@ button:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
     <div class="eyebrow">Әйтеке би кенті · 1904–1905</div>
     <h1>Қазалы станциясының су мұнарасы</h1>
   </div>
-  <p class="note">Фотосурет бойынша жасалған шартты модель. Пропорциялар көз мөлшерімен алынған.</p>
+  <p class="note">Фотосуреттер бойынша жасалған шартты модель. Пропорциялар көз мөлшерімен алынған.</p>
 </header>
 
 <div id="stage">
@@ -59,6 +62,10 @@ button:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
 </div>
 
 <div class="dock">
+  <div class="seg" role="group" aria-label="Мұнараның көрінісі">
+    <button id="bAfter" aria-pressed="true">Қазіргі түрі</button>
+    <button id="bBefore" aria-pressed="false">Жөндеуге дейін</button>
+  </div>
   <button id="bRotate" aria-pressed="true">Айналу</button>
   <button id="bTags" aria-pressed="true">Белгілер</button>
   <button id="bInside" aria-pressed="false">Ішін көру</button>
@@ -127,121 +134,141 @@ const SHAFT_TOP=BASE_H+SHAFT_H; // 16.9
 const rAt=y=>R_BOT-(y-BASE_H)/SHAFT_H*(R_BOT-R_TOP);
 const yFromTop=t=>SHAFT_TOP-t; // t = units measured down from the top of the shaft
 
+/* ---------- two looks: before and after the renovation ---------- */
+const LOOKS={
+  before:{
+    mortar:'#DCCFB2', brick:[38,6,30,12,62,12], brickLow:null, stone:'#D9CDB2', stoneD:'#B9AA8A', band:'#5C4334', dark:'#2A221D',
+    frieze:'#CBBD9C', mShadow:'#9E8D6E', mLine:'#EAE0C8', niche:'#B59D77', lattice:true, faint:'rgba(110,82,58,.55)',
+    stone3:0xD6C9AC, band3:0x5C4334, plinth3:0x9C8567
+  },
+  after:{
+    mortar:'#E9D6C6', brick:[22,6,50,10,64,8], brickLow:[11,5,44,10,59,8], stone:'#EFE6D5', stoneD:'#DCCDB6', band:'#474B50', dark:'#26303C',
+    frieze:'#EFE5D2', mShadow:'#C4B49B', mLine:'#FBF6EC', niche:'#D9A98B', lattice:false, faint:'rgba(150,96,74,.45)',
+    stone3:0xEDE3D1, band3:0x121417, plinth3:0xB98C7A
+  }
+};
+
 /* ---------- shaft texture (painted façade) ---------- */
 const W=2048,H=1728,S=H/SHAFT_H; // px per unit vertically
 const col=document.createElement('canvas');col.width=W;col.height=H;
 const bmp=document.createElement('canvas');bmp.width=W;bmp.height=H;
 const c=col.getContext('2d'), b=bmp.getContext('2d');
 let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
-
-const MORTAR='#DCCFB2', STONE='#D9CDB2', STONE_D='#B9AA8A', BAND='#5C4334', DARK='#2A221D';
-// bricks
-c.fillStyle=MORTAR;c.fillRect(0,0,W,H);b.fillStyle='#3a3a3a';b.fillRect(0,0,W,H);
 const CH=8, BL=24;
-for(let r=0,y=0;y<H;r++,y+=CH){
-  const off=(r%2)*BL/2;
-  for(let x=-BL+off;x<W;x+=BL){
-    const l=62+rnd()*12, s=30+rnd()*12, h=38+rnd()*6;
-    c.fillStyle=`hsl(${h},${s}%,${l}%)`;c.fillRect(x+1,y+1,BL-1.5,CH-1.5);
-    b.fillStyle=`rgb(${190+rnd()*30|0},${190+rnd()*30|0},${190+rnd()*30|0})`;b.fillRect(x+1,y+1,BL-1.5,CH-1.5);
+
+function paintFacade(P){
+  seed=7;
+  const STONE=P.stone, STONE_D=P.stoneD, BAND=P.band, DARK=P.dark;
+  const LOW_FROM=7.7*S;
+  c.fillStyle=P.mortar;c.fillRect(0,0,W,H);b.fillStyle='#3a3a3a';b.fillRect(0,0,W,H);
+  for(let r=0,y=0;y<H;r++,y+=CH){
+    const off=(r%2)*BL/2, B=(P.brickLow&&y>LOW_FROM)?P.brickLow:P.brick;
+    for(let x=-BL+off;x<W;x+=BL){
+      const h=B[0]+rnd()*B[1], s=B[2]+rnd()*B[3], l=B[4]+rnd()*B[5];
+      c.fillStyle=`hsl(${h},${s}%,${l}%)`;c.fillRect(x+1,y+1,BL-1.5,CH-1.5);
+      b.fillStyle=`rgb(${190+rnd()*30|0},${190+rnd()*30|0},${190+rnd()*30|0})`;b.fillRect(x+1,y+1,BL-1.5,CH-1.5);
+    }
   }
-}
-function paint(fn){fn(c,false);fn(b,true);}
-function band(t,th,color){const y=t*S;c.fillStyle=color;c.fillRect(0,y,W,th*S);b.fillStyle='#e6e6e6';b.fillRect(0,y,W,th*S);}
-function faint(t){c.fillStyle='rgba(110,82,58,.55)';c.fillRect(0,t*S,W,4);}
+  function paint(fn){fn(c,false);fn(b,true);}
+  function band(t,th,color){const y=t*S;c.fillStyle=color;c.fillRect(0,y,W,th*S);b.fillStyle='#e6e6e6';b.fillRect(0,y,W,th*S);}
+  function faint(t){c.fillStyle=P.faint;c.fillRect(0,t*S,W,4);}
 
-// lower faint courses and base
-[10.2,10.9,11.6,12.3,13.0,14.3,15.0].forEach(faint);
-c.fillStyle='rgba(90,66,48,.18)';c.fillRect(0,15.4*S,W,0.6*S);
+  [10.2,10.9,11.6,12.3,13.0,14.3,15.0].forEach(faint);
+  c.fillStyle='rgba(90,66,48,.18)';c.fillRect(0,15.4*S,W,0.6*S);
 
-// meander frieze (top band)
-(function(){
-  const y0=0, y1=1.12*S; c.fillStyle='#CBBD9C';c.fillRect(0,y0,W,y1);b.fillStyle='#b4b4b4';b.fillRect(0,y0,W,y1);
-  c.fillStyle=STONE;c.fillRect(0,0,W,12);c.fillRect(0,y1-14,W,14);
-  b.fillStyle='#f0f0f0';b.fillRect(0,0,W,12);b.fillRect(0,y1-14,W,14);
-  const n=26,uw=W/n,gx=uw/5,gy=16,top=24;
-  const pts=[[0,4],[0,0],[4,0],[4,3],[2,3],[2,2],[3,2],[3,1],[1,1],[1,4],[5,4]];
-  for(let pass=0;pass<3;pass++){
-    const ctx=pass===2?b:c;
-    ctx.lineWidth=9;ctx.lineJoin='miter';ctx.lineCap='square';
-    ctx.strokeStyle=pass===0?'#9E8D6E':pass===1?'#EAE0C8':'#ffffff';
-    const dy=pass===0?3:0;
+  // meander frieze (top band)
+  (function(){
+    const y1=1.12*S; c.fillStyle=P.frieze;c.fillRect(0,0,W,y1);b.fillStyle='#b4b4b4';b.fillRect(0,0,W,y1);
+    c.fillStyle=STONE;c.fillRect(0,0,W,12);c.fillRect(0,y1-14,W,14);
+    b.fillStyle='#f0f0f0';b.fillRect(0,0,W,12);b.fillRect(0,y1-14,W,14);
+    const n=26,uw=W/n,gx=uw/5,gy=16,top=24;
+    const pts=[[0,4],[0,0],[4,0],[4,3],[2,3],[2,2],[3,2],[3,1],[1,1],[1,4],[5,4]];
+    for(let pass=0;pass<3;pass++){
+      const ctx=pass===2?b:c;
+      ctx.lineWidth=9;ctx.lineJoin='miter';ctx.lineCap='square';
+      ctx.strokeStyle=pass===0?P.mShadow:pass===1?P.mLine:'#ffffff';
+      const dy=pass===0?3:0;
+      for(let i=-1;i<=n;i++){
+        ctx.beginPath();
+        pts.forEach((p,k)=>{const x=i*uw+p[0]*gx, y=top+p[1]*gy+dy; k?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+        ctx.stroke();
+      }
+    }
+  })();
+  band(1.12,0.13,BAND);
+  c.fillStyle=STONE;c.fillRect(0,1.25*S,W,6);
+
+  // arcature: pointed blind arches with a few dark slit windows
+  (function(){
+    const n=18,w=W/n,y0=1.3*S+2,y1=y0+1.12*S;
+    function lancet(ctx,cx,hw,top,bot){ctx.beginPath();ctx.moveTo(cx-hw,bot);ctx.lineTo(cx-hw,top+hw*1.3);ctx.quadraticCurveTo(cx-hw,top+hw*.25,cx,top);ctx.quadraticCurveTo(cx+hw,top+hw*.25,cx+hw,top+hw*1.3);ctx.lineTo(cx+hw,bot);ctx.closePath();}
     for(let i=-1;i<=n;i++){
-      ctx.beginPath();
-      pts.forEach((p,k)=>{const x=i*uw+p[0]*gx, y=top+p[1]*gy+dy; k?ctx.lineTo(x,y):ctx.moveTo(x,y);});
-      ctx.stroke();
+      const cx=(i+0.5)*w, tx=i*w;
+      c.fillStyle=STONE;c.fillRect(tx-14,y0,28,26);c.fillRect(tx-8,y0+26,16,18);
+      b.fillStyle='#f4f4f4';b.fillRect(tx-14,y0,28,26);b.fillRect(tx-8,y0+26,16,18);
+      c.fillStyle='rgba(60,40,25,.35)';lancet(c,cx+3,33,y0+6,y1+4);c.fill();
+      c.fillStyle=STONE;lancet(c,cx,33,y0+2,y1);c.fill();
+      b.fillStyle='#ffffff';lancet(b,cx,33,y0+2,y1);b.fill();
+      const win=(i%3===0);
+      c.fillStyle=win?DARK:P.niche;lancet(c,cx,21,y0+16,y1);c.fill();
+      b.fillStyle=win?'#000':'#707070';lancet(b,cx,21,y0+16,y1);b.fill();
+      c.fillStyle=STONE_D;c.fillRect(cx-36,y1-2,72,10);
     }
+  })();
+
+  band(4.70,0.12,BAND);c.fillStyle=STONE;c.fillRect(0,4.82*S,W,5);
+
+  // arched window: lattice before the renovation, new glazing after
+  function archWindow(cx){
+    const top=4.98*S, bot=6.92*S, hw=0.58*S/2+10, iw=0.58*S/2;
+    paint((ctx,isB)=>{
+      ctx.fillStyle=isB?'#ffffff':STONE;
+      ctx.beginPath();ctx.moveTo(cx-hw-14,top+hw+6);ctx.arc(cx,top+hw+6,hw+14,Math.PI,0);ctx.lineTo(cx+hw+14,top+hw+40);ctx.lineTo(cx+hw,top+hw+40);ctx.lineTo(cx+hw,top+hw+6);ctx.arc(cx,top+hw+6,hw,0,Math.PI,true);ctx.lineTo(cx-hw,top+hw+40);ctx.lineTo(cx-hw-14,top+hw+40);ctx.closePath();ctx.fill();
+      ctx.fillStyle=isB?'#000':DARK;
+      ctx.beginPath();ctx.moveTo(cx-iw,bot);ctx.lineTo(cx-iw,top+hw+10);ctx.arc(cx,top+hw+10,iw,Math.PI,0);ctx.lineTo(cx+iw,bot);ctx.closePath();ctx.fill();
+      if(!isB){
+        ctx.save();ctx.clip();
+        if(P.lattice){
+          ctx.strokeStyle='#6E5B4A';ctx.lineWidth=2.5;
+          for(let k=-12;k<14;k++){ctx.beginPath();ctx.moveTo(cx-iw+k*12,top+hw+40);ctx.lineTo(cx-iw+k*12+120,bot);ctx.stroke();ctx.beginPath();ctx.moveTo(cx+iw-k*12,top+hw+40);ctx.lineTo(cx+iw-k*12-120,bot);ctx.stroke();}
+          ctx.fillStyle='#6E5B4A';ctx.fillRect(cx-iw,top+hw+36,iw*2,4);
+        }else{
+          const g=ctx.createLinearGradient(cx-iw,0,cx+iw,0);g.addColorStop(0,'rgba(150,180,210,.10)');g.addColorStop(.45,'rgba(190,215,235,.35)');g.addColorStop(1,'rgba(150,180,210,.05)');
+          ctx.fillStyle=g;ctx.fillRect(cx-iw,top,iw*2,bot-top);
+          ctx.fillStyle='#E9E4DA';ctx.fillRect(cx-3,top,6,bot-top);ctx.fillRect(cx-iw,top+hw+60,iw*2,5);
+        }
+        ctx.restore();
+      }
+      ctx.fillStyle=isB?'#f2f2f2':STONE;
+      const sw=0.95*S/2;ctx.fillRect(cx-sw,bot,sw*2,12);
+      ctx.fillRect(cx-sw,bot+12,18,22);ctx.fillRect(cx+sw-18,bot+12,18,22);ctx.fillRect(cx-9,bot+12,18,22);
+      ctx.fillRect(cx-sw,bot+34,sw*2,8);
+    });
   }
-})();
-band(1.12,0.13,BAND);
-c.fillStyle=STONE;c.fillRect(0,1.25*S,W,6);
+  archWindow(W/2);archWindow(0);archWindow(W);
 
-// arcature: pointed blind arches with a few dark slit windows
-(function(){
-  const n=18,w=W/n,y0=1.3*S+2,y1=y0+1.12*S;
-  function lancet(ctx,cx,hw,top,bot){ctx.beginPath();ctx.moveTo(cx-hw,bot);ctx.lineTo(cx-hw,top+hw*1.3);ctx.quadraticCurveTo(cx-hw,top+hw*.25,cx,top);ctx.quadraticCurveTo(cx+hw,top+hw*.25,cx+hw,top+hw*1.3);ctx.lineTo(cx+hw,bot);ctx.closePath();}
-  for(let i=-1;i<=n;i++){
-    const cx=(i+0.5)*w;
-    // teeth between arches
-    const tx=i*w;
-    c.fillStyle=STONE;c.fillRect(tx-14,y0,28,26);c.fillRect(tx-8,y0+26,16,18);
-    b.fillStyle='#f4f4f4';b.fillRect(tx-14,y0,28,26);b.fillRect(tx-8,y0+26,16,18);
-    // shadow, frame, niche
-    c.fillStyle='rgba(60,40,25,.35)';lancet(c,cx+3,33,y0+6,y1+4);c.fill();
-    c.fillStyle=STONE;lancet(c,cx,33,y0+2,y1);c.fill();
-    b.fillStyle='#ffffff';lancet(b,cx,33,y0+2,y1);b.fill();
-    const win=(i%3===0);
-    c.fillStyle=win?DARK:'#B59D77';lancet(c,cx,21,y0+16,y1);c.fill();
-    b.fillStyle=win?'#000':'#707070';lancet(b,cx,21,y0+16,y1);b.fill();
-    c.fillStyle=STONE_D;c.fillRect(cx-36,y1-2,72,10);
-  }
-})();
+  band(7.45,0.1,BAND);c.fillStyle=STONE;c.fillRect(0,7.56*S,W,5);band(7.66,0.1,BAND);
 
-// double band above the arched windows
-band(4.70,0.12,BAND);c.fillStyle=STONE;c.fillRect(0,4.82*S,W,5);
-
-// arched window with lattice, placed front (u=.5) and back (u=0 / u=1)
-function archWindow(cx){
-  const top=4.98*S, bot=6.92*S, hw=0.58*S/2+10, iw=0.58*S/2;
-  paint((ctx,isB)=>{
-    // stone surround: keyhole-like horseshoe arch
-    ctx.fillStyle=isB?'#ffffff':STONE;
-    ctx.beginPath();ctx.moveTo(cx-hw-14,top+hw+6);ctx.arc(cx,top+hw+6,hw+14,Math.PI,0);ctx.lineTo(cx+hw+14,top+hw+40);ctx.lineTo(cx+hw,top+hw+40);ctx.lineTo(cx+hw,top+hw+6);ctx.arc(cx,top+hw+6,hw,0,Math.PI,true);ctx.lineTo(cx-hw,top+hw+40);ctx.lineTo(cx-hw-14,top+hw+40);ctx.closePath();ctx.fill();
-    // opening
-    ctx.fillStyle=isB?'#000':DARK;
-    ctx.beginPath();ctx.moveTo(cx-iw,bot);ctx.lineTo(cx-iw,top+hw+10);ctx.arc(cx,top+hw+10,iw,Math.PI,0);ctx.lineTo(cx+iw,bot);ctx.closePath();ctx.fill();
-    if(!isB){
-      ctx.save();ctx.clip();
-      ctx.strokeStyle='#6E5B4A';ctx.lineWidth=2.5;
-      for(let k=-12;k<14;k++){ctx.beginPath();ctx.moveTo(cx-iw+k*12,top+hw+40);ctx.lineTo(cx-iw+k*12+120,bot);ctx.stroke();ctx.beginPath();ctx.moveTo(cx+iw-k*12,top+hw+40);ctx.lineTo(cx+iw-k*12-120,bot);ctx.stroke();}
-      ctx.fillStyle='#6E5B4A';ctx.fillRect(cx-iw,top+hw+36,iw*2,4);
-      ctx.restore();
-    }
-    // stepped sill bracket
-    ctx.fillStyle=isB?'#f2f2f2':STONE;
-    const sw=0.95*S/2;ctx.fillRect(cx-sw,bot,sw*2,12);
-    ctx.fillRect(cx-sw,bot+12,18,22);ctx.fillRect(cx+sw-18,bot+12,18,22);ctx.fillRect(cx-9,bot+12,18,22);
-    ctx.fillRect(cx-sw,bot+34,sw*2,8);
-  });
+  // round window (oculus) in a square stone frame
+  (function(cx){
+    const cy=8.45*S, fs=0.98*S/2, r=0.37*S;
+    paint((ctx,isB)=>{
+      ctx.fillStyle=isB?'#ffffff':STONE;ctx.fillRect(cx-fs,cy-fs,fs*2,fs*2);
+      ctx.fillStyle=isB?'#cfcfcf':STONE_D;ctx.fillRect(cx-fs+8,cy-fs+8,fs*2-16,fs*2-16);
+      ctx.fillStyle=isB?'#ffffff':STONE;ctx.beginPath();ctx.arc(cx,cy,r+8,0,7);ctx.fill();
+      ctx.fillStyle=isB?'#000':DARK;ctx.beginPath();ctx.arc(cx,cy,r-4,0,7);ctx.fill();
+      if(!isB){
+        ctx.strokeStyle=P.lattice?'#7A6654':'#E9E4DA';ctx.lineWidth=3;
+        const n=P.lattice?8:4;
+        for(let k=0;k<n;k++){const a=k*Math.PI*2/n;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*(r-4),cy+Math.sin(a)*(r-4));ctx.stroke();}
+        if(P.lattice){ctx.beginPath();ctx.arc(cx,cy,r*0.35,0,7);ctx.stroke();}
+      }
+    });
+  })(W/2);
+  band(9.02,0.11,BAND);band(9.2,0.08,BAND);
+  band(13.62,0.1,BAND);
 }
-archWindow(W/2);archWindow(0);archWindow(W);
-
-band(7.45,0.1,BAND);c.fillStyle=STONE;c.fillRect(0,7.56*S,W,5);band(7.66,0.1,BAND);
-
-// round window (oculus) in a square stone frame
-function oculus(cx){
-  const cy=8.45*S, fs=0.98*S/2, r=0.37*S;
-  paint((ctx,isB)=>{
-    ctx.fillStyle=isB?'#ffffff':STONE;ctx.fillRect(cx-fs,cy-fs,fs*2,fs*2);
-    ctx.fillStyle=isB?'#cfcfcf':STONE_D;ctx.fillRect(cx-fs+8,cy-fs+8,fs*2-16,fs*2-16);
-    ctx.fillStyle=isB?'#ffffff':STONE;ctx.beginPath();ctx.arc(cx,cy,r+8,0,7);ctx.fill();
-    ctx.fillStyle=isB?'#000':DARK;ctx.beginPath();ctx.arc(cx,cy,r-4,0,7);ctx.fill();
-    if(!isB){ctx.strokeStyle='#7A6654';ctx.lineWidth=3;for(let k=0;k<8;k++){const a=k*Math.PI/4;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*(r-4),cy+Math.sin(a)*(r-4));ctx.stroke();}ctx.beginPath();ctx.arc(cx,cy,r*0.35,0,7);ctx.stroke();}
-  });
-}
-oculus(W/2);
-band(9.02,0.11,BAND);band(9.2,0.08,BAND);
-band(13.62,0.1,BAND);
+paintFacade(LOOKS.after);
 
 /* ---------- materials ---------- */
 const shaftMap=new THREE.CanvasTexture(col);shaftMap.encoding=THREE.sRGBEncoding;shaftMap.anisotropy=renderer.capabilities.getMaxAnisotropy();
@@ -249,9 +276,9 @@ const shaftBump=new THREE.CanvasTexture(bmp);
 const shell=[];// exterior materials (for the see-through mode)
 function mat(o){const m=new THREE.MeshStandardMaterial(o);shell.push(m);return m;}
 const mShaft=mat({map:shaftMap,bumpMap:shaftBump,bumpScale:0.045,roughness:.92});
-const mStone=mat({color:0xD6C9AC,roughness:.9});
-const mBand=mat({color:0x5C4334,roughness:.85});
-const mPlinth=mat({color:0x9C8567,roughness:.95});
+const mStone=mat({color:LOOKS.after.stone3,roughness:.9});
+const mBand=mat({color:LOOKS.after.band3,roughness:.6,metalness:.3});
+const mPlinth=mat({color:LOOKS.after.plinth3,roughness:.95});
 
 function domeTex(){
   const cv=document.createElement('canvas');cv.width=512;cv.height=512;const x=cv.getContext('2d');
@@ -259,53 +286,91 @@ function domeTex(){
   for(let i=0;i<220;i++){const px=rnd()*512,w=2+rnd()*8;x.fillStyle=rnd()<.25?'rgba(96,130,112,.22)':'rgba(55,32,20,.18)';x.fillRect(px,rnd()*200,w,180+rnd()*330);}
   const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;return t;
 }
+// before: copper dome
 const mDome=mat({map:domeTex(),roughness:.5,metalness:.45});
 const mRib=mat({color:0x5E3B26,roughness:.55,metalness:.4});
 const mLantern=mat({color:0x6F8C83,roughness:.6,metalness:.25});
 const mLanternRoof=mat({color:0x4F6A63,roughness:.55,metalness:.35});
 const mGlass=mat({color:0x1C2228,roughness:.2,metalness:.6});
+// after: dark metal roof with light seams
+const mRoof=mat({color:0x07080A,roughness:.62,metalness:.2,flatShading:true});
+const mSeam=mat({color:0xDADDE0,roughness:.5,metalness:.2});
+const mDisc=mat({color:0xF3F1EC,roughness:.6});
 
 /* ---------- exterior ---------- */
 const tower=new THREE.Group();scene.add(tower);
-function add(geo,m,y,ry){const o=new THREE.Mesh(geo,m);o.position.y=y;if(ry)o.rotation.y=ry;o.castShadow=true;o.receiveShadow=true;tower.add(o);return o;}
+function add(geo,m,y,ry,parent){const o=new THREE.Mesh(geo,m);o.position.y=y;if(ry)o.rotation.y=ry;o.castShadow=true;o.receiveShadow=true;(parent||tower).add(o);return o;}
 
 add(new THREE.CylinderGeometry(3.3,3.38,BASE_H,96),mPlinth,BASE_H/2);
 add(new THREE.CylinderGeometry(3.24,3.3,0.14,96),mStone,BASE_H-0.05);
 add(new THREE.CylinderGeometry(R_TOP,R_BOT,SHAFT_H,160,1,true),mShaft,BASE_H+SHAFT_H/2,Math.PI);
-// relief bands
 [[1.18,.14],[4.76,.13],[7.5,.11],[7.71,.11],[9.07,.12],[9.24,.09],[13.67,.11]].forEach(([t,h])=>{const y=yFromTop(t),r=rAt(y)+0.035;add(new THREE.CylinderGeometry(r,r,h,128),mBand,y);});
 add(new THREE.CylinderGeometry(rAt(yFromTop(1.27))+0.03,rAt(yFromTop(1.27))+0.03,0.06,128),mStone,yFromTop(1.27));
-// cornice
 add(new THREE.CylinderGeometry(3.1,3.0,0.32,128),mStone,SHAFT_TOP+0.16);
 add(new THREE.CylinderGeometry(3.24,3.18,0.14,128),mStone,SHAFT_TOP+0.39);
 add(new THREE.CylinderGeometry(2.86,2.95,0.3,128),mStone,SHAFT_TOP+0.6);
 const DOME_Y=SHAFT_TOP+0.75, DR=2.78, DH=2.15, TH_END=1.29;
-// dome
+
+// roof before the renovation: ribbed copper dome with a glazed lantern
+const roofOld=new THREE.Group();tower.add(roofOld);
 const prof=[];for(let i=0;i<=40;i++){const th=TH_END*i/40;prof.push(new THREE.Vector2(DR*Math.cos(th),DH*Math.sin(th)));}
-add(new THREE.LatheGeometry(prof,96),mDome,DOME_Y);
-// ribs
+add(new THREE.LatheGeometry(prof,96),mDome,DOME_Y,0,roofOld);
 for(let k=0;k<16;k++){
   const a=k/16*Math.PI*2;const pts=[];
   for(let i=0;i<=24;i++){const th=TH_END*i/24;const r=DR*Math.cos(th)+0.03;pts.push(new THREE.Vector3(Math.sin(a)*r,DOME_Y+DH*Math.sin(th)+0.01,Math.cos(a)*r));}
-  const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,0.035,6),mRib);m.castShadow=true;tower.add(m);
+  const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,0.035,6),mRib);m.castShadow=true;roofOld.add(m);
 }
-// dome oculus (front)
 (function(){
   const th=0.78,r=DR*Math.cos(th),y=DOME_Y+DH*Math.sin(th);
   const n=new THREE.Vector3(0,Math.sin(th)/DH,Math.cos(th)/DR).normalize();
   const g=new THREE.Group();g.position.set(0,y,r);g.lookAt(new THREE.Vector3(0,y,r).add(n));
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.24,0.06,10,32),mStone);g.add(ring);
+  g.add(new THREE.Mesh(new THREE.TorusGeometry(0.24,0.06,10,32),mStone));
   const glass=new THREE.Mesh(new THREE.CircleGeometry(0.2,24),mGlass);glass.position.z=-0.02;g.add(glass);
-  tower.add(g);
+  roofOld.add(g);
 })();
-// lantern
 const LY=DOME_Y+DH*Math.sin(TH_END);
-add(new THREE.CylinderGeometry(0.84,0.84,0.12,8),mLanternRoof,LY+0.02);
-add(new THREE.CylinderGeometry(0.76,0.78,0.85,8),mLantern,LY+0.5);
-for(let k=0;k<8;k++){const a=(k+0.5)/8*Math.PI*2;const p=new THREE.Mesh(new THREE.PlaneGeometry(0.36,0.5),mGlass);p.position.set(Math.sin(a)*0.75,LY+0.52,Math.cos(a)*0.75);p.rotation.y=a;tower.add(p);}
-add(new THREE.CylinderGeometry(0.62,1.08,0.24,8),mLanternRoof,LY+1.05);
-add(new THREE.CylinderGeometry(0.34,0.5,0.16,8),mLanternRoof,LY+1.25);
-add(new THREE.CylinderGeometry(0.035,0.05,1.3,8),mRib,LY+1.95);
+add(new THREE.CylinderGeometry(0.84,0.84,0.12,8),mLanternRoof,LY+0.02,0,roofOld);
+add(new THREE.CylinderGeometry(0.76,0.78,0.85,8),mLantern,LY+0.5,0,roofOld);
+for(let k=0;k<8;k++){const a=(k+0.5)/8*Math.PI*2;const p=new THREE.Mesh(new THREE.PlaneGeometry(0.36,0.5),mGlass);p.position.set(Math.sin(a)*0.75,LY+0.52,Math.cos(a)*0.75);p.rotation.y=a;roofOld.add(p);}
+add(new THREE.CylinderGeometry(0.62,1.08,0.24,8),mLanternRoof,LY+1.05,0,roofOld);
+add(new THREE.CylinderGeometry(0.34,0.5,0.16,8),mLanternRoof,LY+1.25,0,roofOld);
+add(new THREE.CylinderGeometry(0.035,0.05,1.3,8),mRib,LY+1.95,0,roofOld);
+
+// roof after the renovation: eight-sided dark metal roof, light seams, white disc, small capped top
+const roofNew=new THREE.Group();tower.add(roofNew);
+const NR=2.82, NH=1.95, NTOP=0.66, NTH=Math.acos(NTOP/NR), FACETS=8, ROT=Math.PI/FACETS;
+const nprof=[];for(let i=0;i<=24;i++){const th=NTH*i/24;nprof.push(new THREE.Vector2(NR*Math.cos(th),NH*Math.sin(th)/Math.sin(NTH)));}
+add(new THREE.LatheGeometry(nprof,FACETS),mRoof,DOME_Y,ROT,roofNew);
+for(let k=0;k<FACETS;k++){
+  const a=ROT+k/FACETS*Math.PI*2;const pts=[];
+  nprof.forEach(p=>pts.push(new THREE.Vector3(Math.sin(a)*(p.x+0.02),DOME_Y+p.y+0.015,Math.cos(a)*(p.x+0.02))));
+  const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),30,0.045,6),mSeam);m.castShadow=true;roofNew.add(m);
+}
+add(new THREE.CylinderGeometry(NR+0.04,NR+0.06,0.1,FACETS),mSeam,DOME_Y+0.05,ROT,roofNew);
+(function(){ // white disc on the front facet
+  const th=NTH*0.62, flat=Math.cos(Math.PI/FACETS);
+  const r=NR*Math.cos(th)*flat, y=DOME_Y+NH*Math.sin(th)/Math.sin(NTH);
+  const K=NH/Math.sin(NTH); const n=new THREE.Vector3(0,Math.sin(th)/K,Math.cos(th)/NR).normalize();
+  const g=new THREE.Group();g.position.set(0,y,r+0.03);g.lookAt(new THREE.Vector3(0,y,r+0.03).add(n));
+  g.add(new THREE.Mesh(new THREE.CircleGeometry(0.34,32),mDisc));
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.34,0.035,8,32),mSeam);g.add(ring);
+  roofNew.add(g);
+})();
+const NY=DOME_Y+NH;
+add(new THREE.CylinderGeometry(NTOP-0.04,NTOP+0.02,0.42,FACETS),mRoof,NY+0.21,ROT,roofNew);
+add(new THREE.CylinderGeometry(NTOP+0.06,NTOP+0.06,0.07,FACETS),mSeam,NY+0.03,ROT,roofNew);
+add(new THREE.CylinderGeometry(NTOP+0.1,NTOP+0.02,0.09,FACETS),mSeam,NY+0.46,ROT,roofNew);
+add(new THREE.CylinderGeometry(0.25,NTOP-0.02,0.2,FACETS),mRoof,NY+0.6,ROT,roofNew);
+add(new THREE.CylinderGeometry(0.03,0.045,0.7,8),mRoof,NY+1.0,0,roofNew);
+
+let look='after';
+function setLook(k){
+  look=k;const P=LOOKS[k];
+  paintFacade(P);shaftMap.needsUpdate=true;shaftBump.needsUpdate=true;
+  mStone.color.setHex(P.stone3);mBand.color.setHex(P.band3);mPlinth.color.setHex(P.plinth3);
+  roofOld.visible=k==='before';roofNew.visible=k==='after';
+}
+setLook('after');
 
 /* ---------- interior (see-through mode) ---------- */
 const inside=new THREE.Group();inside.visible=false;scene.add(inside);
@@ -331,7 +396,7 @@ for(let i=0;i<38;i++){
 /* ---------- labels ---------- */
 const tagsEl=document.getElementById('tags');
 const TAGS=[
-  {t:'Күмбез мен фонарь',p:[0,DOME_Y+1.55,1.9],front:true},
+  {t:'Жаңа шатыр',p:[0,DOME_Y+1.35,1.95],front:true},
   {t:'Меандр өрнекті белдеу',p:[0,yFromTop(0.55),3.0],front:true},
   {t:'Сүйір доғалы фриз',p:[0,yFromTop(1.9),3.0],front:true},
   {t:'Доғалы терезе',p:[0,yFromTop(5.9),3.05],front:true},
@@ -365,6 +430,14 @@ bInside.onclick=()=>{
   shell.forEach(m=>{m.transparent=seeInside;m.opacity=seeInside?0.16:1;m.depthWrite=!seeInside;m.needsUpdate=true;});
   tower.traverse(o=>{if(o.isMesh)o.castShadow=!seeInside;});
 };
+const bAfter=document.getElementById('bAfter'),bBefore=document.getElementById('bBefore');
+function applyLook(k){
+  setLook(k);
+  TAGS[0].el.lastChild.textContent=k==='after'?'Жаңа шатыр':'Мыс күмбез бен фонарь';
+  bAfter.setAttribute('aria-pressed',String(k==='after'));bBefore.setAttribute('aria-pressed',String(k==='before'));
+}
+bAfter.onclick=()=>applyLook('after');bBefore.onclick=()=>applyLook('before');
+if(location.hash==='#before')applyLook('before');
 document.getElementById('bReset').onclick=()=>{camera.position.copy(HOME.pos);controls.target.copy(HOME.target);controls.update();};
 
 /* ---------- size + loop ---------- */
